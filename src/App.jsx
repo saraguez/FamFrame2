@@ -9,7 +9,6 @@ import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged }
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
 
 // --- 1. FIREBASE INITIALIZATION ---
-// (You will replace this block in Step 6 of the deployment guide)
 const firebaseConfig = {
   apiKey: "AIzaSyBEGOUuBCZv_cRDZzZWCTJpEzTj_TOrY9M",
   authDomain: "famframe-dceb8.firebaseapp.com",
@@ -18,8 +17,13 @@ const firebaseConfig = {
   messagingSenderId: "216485333201",
   appId: "1:216485333201:web:5ff726702d9523f7589df0"
 };
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);         // <-- You were missing this!
+const db = getFirestore(app);      // <-- You were missing this!
+const appId = "my-family-frame";   // <-- You were missing this!
+
 // --- 2. CONTEXT & STATE MANAGEMENT ---
 const PhotoContext = createContext(null);
 
