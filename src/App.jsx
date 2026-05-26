@@ -2,15 +2,15 @@ import React, { useState, createContext, useContext, useEffect, useRef } from 'r
 import { 
   Sparkles, UploadCloud, Image as ImageIcon, Trash2, Camera, 
   Shield, ShieldOff, Play, Pause, X, ChevronLeft, ChevronRight, 
-  Link as LinkIcon, Loader2, Maximize, Minimize 
+  Link as LinkIcon, Loader2, Maximize, Minimize, Edit3, Check 
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore';
 
 // --- 1. FIREBASE INITIALIZATION ---
-// I have placed your real keys here so it works instantly!
-const firebaseConfig = {
+// Safely use Canvas preview config OR your personal Vercel config
+const personalFirebaseConfig = {
   apiKey: "AIzaSyBEGOUuBCZv_cRDZzZWCTJpEzTj_TOrY9M",
   authDomain: "famframe-dceb8.firebaseapp.com",
   projectId: "famframe-dceb8",
@@ -19,11 +19,15 @@ const firebaseConfig = {
   appId: "1:216485333201:web:5ff726702d9523f7589df0"
 };
 
+const firebaseConfig = typeof __firebase_config !== 'undefined' 
+  ? JSON.parse(__firebase_config) 
+  : personalFirebaseConfig;
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = "my-family-frame";
+const appId = typeof __app_id !== 'undefined' ? __app_id : "my-family-frame";
 
 // --- 2. CONTEXT & STATE MANAGEMENT ---
 const PhotoContext = createContext(null);
@@ -50,8 +54,7 @@ function PhotoProvider({ children }) {
           try {
             await signInWithCustomToken(auth, __initial_auth_token);
           } catch (tokenError) {
-            // Fallback to anonymous login if the token doesn't match the custom Firebase keys
-            console.warn("Custom token mismatch (normal when using personal Firebase keys). Falling back to anonymous login.");
+            console.warn("Custom token mismatch. Falling back to anonymous login.");
             await signInAnonymously(auth);
           }
         } else {
@@ -71,9 +74,8 @@ function PhotoProvider({ children }) {
 
   // Database Effect: Listen to real-time changes in the cloud
   useEffect(() => {
-    if (!user) return; // Guard clause: Only query if authenticated
+    if (!user) return; // Guard clause
     
-    // Strict path for public shared data
     const photosRef = collection(db, 'artifacts', appId, 'public', 'data', 'photos');
     
     const unsubscribe = onSnapshot(
@@ -100,12 +102,13 @@ function PhotoProvider({ children }) {
   }, [user]);
 
   // Actions
-  const addPhoto = async (url) => {
+  const addPhoto = async (url, caption = '') => {
     if (!user) return;
     try {
       const photosRef = collection(db, 'artifacts', appId, 'public', 'data', 'photos');
       await addDoc(photosRef, {
         url,
+        caption, 
         createdAt: Date.now(),
         addedBy: user.uid
       });
@@ -123,10 +126,21 @@ function PhotoProvider({ children }) {
     }
   };
 
+  const updatePhotoCaption = async (id, newCaption) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'photos', id), {
+        caption: newCaption
+      });
+    } catch (error) {
+      console.error("Failed to update caption:", error);
+    }
+  };
+
   const toggleAdmin = () => setIsAdmin(prev => !prev);
 
   return (
-    <PhotoContext.Provider value={{ photos, isAdmin, addPhoto, removePhoto, toggleAdmin, loading }}>
+    <PhotoContext.Provider value={{ photos, isAdmin, addPhoto, removePhoto, updatePhotoCaption, toggleAdmin, loading }}>
       {children}
     </PhotoContext.Provider>
   );
@@ -164,26 +178,59 @@ function Header() {
 function UploadZone() {
   const { addPhoto } = usePhotos();
   const [url, setUrl] = useState('');
+  const [caption, setCaption] = useState(''); 
+  const [defaultCaption, setDefaultCaption] = useState(''); // Stores the auto-generated location/date
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Auto-generate Caption on load
+  useEffect(() => {
+    const fetchLocation = async () => {
+      const date = new Date();
+      const monthYear = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      
+      try {
+        // Free IP-based location API (no annoying popups needed)
+        const response = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client');
+        const data = await response.json();
+        
+        const city = data.city || data.locality;
+        const country = data.countryName;
+        
+        let generated = monthYear;
+        if (city && country) {
+          generated = `${monthYear} • ${city}, ${country}`;
+        }
+        
+        setDefaultCaption(generated);
+        setCaption(generated); // Pre-fill the input box
+      } catch (error) {
+        // If location fails, just use the date
+        setDefaultCaption(monthYear);
+        setCaption(monthYear);
+      }
+    };
+    
+    fetchLocation();
+  }, []);
 
   const handleAdd = async (e) => {
     e.preventDefault();
     if (url.trim()) {
       setIsSubmitting(true);
-      await addPhoto(url.trim());
+      await addPhoto(url.trim(), caption.trim());
       setUrl('');
+      setCaption(defaultCaption); // Reset back to auto-caption
       setIsSubmitting(false);
     }
   };
 
   const handleFileUpload = async (e) => {
-    const files = Array.from(e.target.files || []).slice(0, 20); // Cap at 20 files
+    const files = Array.from(e.target.files || []).slice(0, 20); 
     if (files.length === 0) return;
 
     setIsSubmitting(true);
     
-    // Process and upload each file individually
     const processFile = (file) => {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -214,9 +261,8 @@ function UploadZone() {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Convert the canvas to a highly compressed JPEG base64 string
             const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-            await addPhoto(dataUrl);
+            await addPhoto(dataUrl, caption.trim());
             resolve();
           };
           img.src = event.target.result;
@@ -225,11 +271,11 @@ function UploadZone() {
       });
     };
 
-    // Wait for all selected files to process and upload
     await Promise.all(files.map(file => processFile(file)));
 
     setIsSubmitting(false);
-    if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
+    setCaption(defaultCaption); // Reset back to auto-caption
+    if (fileInputRef.current) fileInputRef.current.value = ''; 
   };
 
   const addRandomDemo = async () => {
@@ -239,11 +285,10 @@ function UploadZone() {
       'https://images.unsplash.com/photo-1609220136736-443140cffec6?q=80&w=1200&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1542037104857-ffbb0b9155fb?q=80&w=1200&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1476703993599-0035a21b17a9?q=80&w=1200&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1581952971145-21950d60d3d2?q=80&w=1200&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?q=80&w=1200&auto=format&fit=crop'
+      'https://images.unsplash.com/photo-1581952971145-21950d60d3d2?q=80&w=1200&auto=format&fit=crop'
     ];
     const randomUrl = demos[Math.floor(Math.random() * demos.length)];
-    await addPhoto(randomUrl);
+    await addPhoto(randomUrl, caption.trim() || "A magical family moment! ✨");
     setIsSubmitting(false);
   };
 
@@ -259,9 +304,27 @@ function UploadZone() {
       <h3 className="text-xl font-semibold text-slate-900 mb-2">
         Share a new photo
       </h3>
-      <p className="text-slate-500 max-w-sm mb-8 text-sm">
+      <p className="text-slate-500 max-w-sm mb-6 text-sm">
         Upload directly from your device (up to 20 at once), paste a link, or use our magical sample generator.
       </p>
+
+      {/* Auto-filled Caption Field */}
+      <div className="w-full max-w-md mb-6 relative">
+        <input 
+          type="text" 
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          placeholder="Write a caption (optional)..." 
+          className="block w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm outline-none bg-white shadow-sm transition-all"
+          disabled={isSubmitting}
+          maxLength={100}
+        />
+        {caption === defaultCaption && caption !== '' && (
+          <span className="absolute -top-2.5 right-4 bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-orange-200">
+            Auto-Detected
+          </span>
+        )}
+      </div>
       
       {/* 1. Device Upload Button */}
       <input 
@@ -325,7 +388,11 @@ function UploadZone() {
 }
 
 function PhotoGrid() {
-  const { photos, isAdmin, removePhoto, loading } = usePhotos();
+  const { photos, isAdmin, removePhoto, updatePhotoCaption, loading } = usePhotos();
+  
+  // State for inline editing
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState("");
 
   if (loading) {
     return (
@@ -345,26 +412,84 @@ function PhotoGrid() {
     );
   }
 
+  const handleStartEdit = (photo) => {
+    setEditingId(photo.id);
+    setEditValue(photo.caption || "");
+  };
+
+  const handleSaveEdit = async (id) => {
+    await updatePhotoCaption(id, editValue);
+    setEditingId(null);
+  };
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 animate-in fade-in duration-500">
       {photos.map((photo) => (
         <div key={photo.id} className="group relative aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm hover:shadow-md transition-all">
           <img 
             src={photo.url} 
-            alt="Family moment" 
+            alt={photo.caption || "Family moment"} 
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop'; }} 
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
           
-          {isAdmin && (
-            <button 
-              onClick={() => removePhoto(photo.id)}
-              className="absolute top-3 right-3 p-2 bg-red-500/95 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 shadow-sm"
-              title="Delete photo"
-            >
-              <Trash2 className="size-4" />
-            </button>
+          {/* Display caption on hover in the grid */}
+          {photo.caption && editingId !== photo.id && (
+            <div className="absolute bottom-0 inset-x-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
+              <p className="text-white text-sm font-medium line-clamp-2 drop-shadow-md">
+                {photo.caption}
+              </p>
+            </div>
+          )}
+          
+          {/* Admin Tools: Edit & Delete Buttons */}
+          {isAdmin && editingId !== photo.id && (
+            <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 shadow-sm z-20">
+              <button 
+                onClick={() => handleStartEdit(photo)}
+                className="p-2.5 bg-blue-500/95 hover:bg-blue-600 text-white rounded-full shadow-sm"
+                title="Edit caption"
+              >
+                <Edit3 className="size-4" />
+              </button>
+              <button 
+                onClick={() => removePhoto(photo.id)}
+                className="p-2.5 bg-red-500/95 hover:bg-red-600 text-white rounded-full shadow-sm"
+                title="Delete photo"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Inline Edit Mode Overlay */}
+          {isAdmin && editingId === photo.id && (
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm p-4 flex flex-col justify-center items-center gap-3 z-30">
+              <p className="text-white text-xs font-semibold uppercase tracking-wider">Edit Caption</p>
+              <textarea 
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                className="w-full text-sm p-3 rounded-xl bg-white/10 text-white border border-white/20 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none resize-none"
+                rows={3}
+                placeholder="Who's in the photo?"
+                autoFocus
+              />
+              <div className="flex gap-2 w-full">
+                <button 
+                  onClick={() => setEditingId(null)}
+                  className="flex-1 py-2 bg-slate-600 hover:bg-slate-500 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => handleSaveEdit(photo.id)}
+                  className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-1"
+                >
+                  <Check className="size-4" /> Save
+                </button>
+              </div>
+            </div>
           )}
         </div>
       ))}
@@ -396,7 +521,6 @@ function SlideshowOverlay({ isOpen, onClose }) {
     }
   }, [isOpen, photos.length]);
 
-  // Track external fullscreen changes (e.g. if the user presses ESC to exit)
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -407,7 +531,6 @@ function SlideshowOverlay({ isOpen, onClose }) {
 
   if (!isOpen || photos.length === 0) return null;
 
-  // Ensure index stays in bounds if photos are deleted while viewing
   const safeIndex = currentIndex >= photos.length ? 0 : currentIndex;
   
   const handleNext = () => setCurrentIndex((prev) => (prev + 1) % photos.length);
@@ -426,7 +549,6 @@ function SlideshowOverlay({ isOpen, onClose }) {
   };
 
   const handleClose = async () => {
-    // Exit fullscreen if we are closing the modal
     if (document.fullscreenElement && document.exitFullscreen) {
       await document.exitFullscreen().catch(console.error);
     }
@@ -438,9 +560,7 @@ function SlideshowOverlay({ isOpen, onClose }) {
       ref={containerRef}
       className="fixed inset-0 z-50 bg-black flex flex-col animate-in fade-in duration-300"
     >
-      
-      {/* Top Bar Controls */}
-      <div className="absolute top-0 inset-x-0 p-4 sm:p-6 flex justify-between items-center z-10 bg-gradient-to-b from-black/60 to-transparent text-white">
+      <div className="absolute top-0 inset-x-0 p-4 sm:p-6 flex justify-between items-center z-20 bg-gradient-to-b from-black/60 to-transparent text-white">
         <div className="text-white/80 font-medium tracking-wide drop-shadow-md">
           {safeIndex + 1} / {photos.length}
         </div>
@@ -469,11 +589,10 @@ function SlideshowOverlay({ isOpen, onClose }) {
         </div>
       </div>
 
-      {/* Main Image Area */}
       <div className="flex-1 relative flex items-center justify-center overflow-hidden">
         <button 
           onClick={handlePrev}
-          className="absolute left-4 sm:left-8 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full z-10 transition-colors backdrop-blur-sm hidden sm:block"
+          className="absolute left-4 sm:left-8 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full z-20 transition-colors backdrop-blur-sm hidden sm:block"
         >
           <ChevronLeft className="size-8" />
         </button>
@@ -481,20 +600,27 @@ function SlideshowOverlay({ isOpen, onClose }) {
         <img 
           key={photos[safeIndex].id}
           src={photos[safeIndex].url} 
-          alt="Slideshow" 
+          alt={photos[safeIndex].caption || "Slideshow"} 
           className="w-full h-full object-contain animate-in fade-in zoom-in-95 duration-500"
           onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop'; }}
         />
 
         <button 
           onClick={handleNext}
-          className="absolute right-4 sm:right-8 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full z-10 transition-colors backdrop-blur-sm hidden sm:block"
+          className="absolute right-4 sm:right-8 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full z-20 transition-colors backdrop-blur-sm hidden sm:block"
         >
           <ChevronRight className="size-8" />
         </button>
+        
+        {/* Caption Overlay in Slideshow */}
+        {photos[safeIndex].caption && (
+          <div className="absolute bottom-8 sm:bottom-12 inset-x-0 flex justify-center z-20 px-6 animate-in slide-in-from-bottom-4 duration-500 pointer-events-none">
+            <div className="bg-black/60 backdrop-blur-md text-white px-8 py-3.5 rounded-full text-base sm:text-lg font-medium shadow-2xl max-w-2xl text-center border border-white/10 tracking-wide">
+              {photos[safeIndex].caption}
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* The progress bar was fully removed from here! */}
     </div>
   );
 }
