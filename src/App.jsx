@@ -8,7 +8,6 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
 
-// --- 1. FIREBASE INITIALIZATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyBEGOUuBCZv_cRDZzZWCTJpEzTj_TOrY9M",
   authDomain: "famframe-dceb8.firebaseapp.com",
@@ -20,10 +19,6 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);         // <-- You were missing this!
-const db = getFirestore(app);      // <-- You were missing this!
-const appId = "my-family-frame";   // <-- You were missing this!
-
 // --- 2. CONTEXT & STATE MANAGEMENT ---
 const PhotoContext = createContext(null);
 
@@ -220,12 +215,12 @@ function UploadZone() {
   const addRandomDemo = async () => {
     setIsSubmitting(true);
     const demos = [
-      '[https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=1200&auto=format&fit=crop](https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=1200&auto=format&fit=crop)',
-      '[https://images.unsplash.com/photo-1609220136736-443140cffec6?q=80&w=1200&auto=format&fit=crop](https://images.unsplash.com/photo-1609220136736-443140cffec6?q=80&w=1200&auto=format&fit=crop)',
-      '[https://images.unsplash.com/photo-1542037104857-ffbb0b9155fb?q=80&w=1200&auto=format&fit=crop](https://images.unsplash.com/photo-1542037104857-ffbb0b9155fb?q=80&w=1200&auto=format&fit=crop)',
-      '[https://images.unsplash.com/photo-1476703993599-0035a21b17a9?q=80&w=1200&auto=format&fit=crop](https://images.unsplash.com/photo-1476703993599-0035a21b17a9?q=80&w=1200&auto=format&fit=crop)',
-      '[https://images.unsplash.com/photo-1581952971145-21950d60d3d2?q=80&w=1200&auto=format&fit=crop](https://images.unsplash.com/photo-1581952971145-21950d60d3d2?q=80&w=1200&auto=format&fit=crop)',
-      '[https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?q=80&w=1200&auto=format&fit=crop](https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?q=80&w=1200&auto=format&fit=crop)'
+      'https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=1200&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1609220136736-443140cffec6?q=80&w=1200&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1542037104857-ffbb0b9155fb?q=80&w=1200&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1476703993599-0035a21b17a9?q=80&w=1200&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1581952971145-21950d60d3d2?q=80&w=1200&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?q=80&w=1200&auto=format&fit=crop'
     ];
     const randomUrl = demos[Math.floor(Math.random() * demos.length)];
     await addPhoto(randomUrl);
@@ -337,7 +332,7 @@ function PhotoGrid() {
             src={photo.url} 
             alt="Family moment" 
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            onError={(e) => { e.target.src = '[https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop](https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop)'; }} // Fallback if URL is broken
+            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop'; }} // Fallback if URL is broken
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
           
@@ -467,7 +462,7 @@ function SlideshowOverlay({ isOpen, onClose }) {
           src={photos[safeIndex].url} 
           alt="Slideshow" 
           className="w-full h-full object-contain animate-in fade-in zoom-in-95 duration-500"
-          onError={(e) => { e.target.src = '[https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop](https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop)'; }}
+          onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop'; }}
         />
 
         <button 
