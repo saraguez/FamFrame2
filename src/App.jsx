@@ -17,8 +17,6 @@ const firebaseConfig = {
   appId: "1:216485333201:web:5ff726702d9523f7589df0"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
 // --- 2. CONTEXT & STATE MANAGEMENT ---
 const PhotoContext = createContext(null);
 
