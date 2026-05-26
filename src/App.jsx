@@ -8,6 +8,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
 
+// --- 1. FIREBASE INITIALIZATION ---
+// I have placed your real keys here so it works instantly!
 const firebaseConfig = {
   apiKey: "AIzaSyBEGOUuBCZv_cRDZzZWCTJpEzTj_TOrY9M",
   authDomain: "famframe-dceb8.firebaseapp.com",
@@ -16,6 +18,12 @@ const firebaseConfig = {
   messagingSenderId: "216485333201",
   appId: "1:216485333201:web:5ff726702d9523f7589df0"
 };
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = "my-family-frame";
 
 // --- 2. CONTEXT & STATE MANAGEMENT ---
 const PhotoContext = createContext(null);
@@ -39,7 +47,13 @@ function PhotoProvider({ children }) {
     const initAuth = async () => {
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+          try {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } catch (tokenError) {
+            // Fallback to anonymous login if the token doesn't match the custom Firebase keys
+            console.warn("Custom token mismatch (normal when using personal Firebase keys). Falling back to anonymous login.");
+            await signInAnonymously(auth);
+          }
         } else {
           await signInAnonymously(auth);
         }
@@ -163,51 +177,59 @@ function UploadZone() {
     }
   };
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []).slice(0, 20); // Cap at 20 files
+    if (files.length === 0) return;
 
     setIsSubmitting(true);
-    const reader = new FileReader();
     
-    // Read the file and compress it using an HTML Canvas before uploading.
-    // This keeps the image lightweight so it syncs globally at lightning speed.
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1000;
-        const MAX_HEIGHT = 1000;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
-        }
+    // Process and upload each file individually
+    const processFile = (file) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
         
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = async () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 1000;
+            const MAX_HEIGHT = 1000;
+            let width = img.width;
+            let height = img.height;
 
-        // Convert the canvas to a highly compressed JPEG base64 string
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-        await addPhoto(dataUrl);
-        
-        setIsSubmitting(false);
-        if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
-      };
-      img.src = event.target.result;
+            if (width > height) {
+              if (width > MAX_WIDTH) {
+                height *= MAX_WIDTH / width;
+                width = MAX_WIDTH;
+              }
+            } else {
+              if (height > MAX_HEIGHT) {
+                width *= MAX_HEIGHT / height;
+                height = MAX_HEIGHT;
+              }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Convert the canvas to a highly compressed JPEG base64 string
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            await addPhoto(dataUrl);
+            resolve();
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
     };
-    reader.readAsDataURL(file);
+
+    // Wait for all selected files to process and upload
+    await Promise.all(files.map(file => processFile(file)));
+
+    setIsSubmitting(false);
+    if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
   };
 
   const addRandomDemo = async () => {
@@ -238,13 +260,14 @@ function UploadZone() {
         Share a new photo
       </h3>
       <p className="text-slate-500 max-w-sm mb-8 text-sm">
-        Upload directly from your device, paste a link, or use our magical sample generator.
+        Upload directly from your device (up to 20 at once), paste a link, or use our magical sample generator.
       </p>
       
       {/* 1. Device Upload Button */}
       <input 
         type="file" 
         accept="image/*" 
+        multiple
         ref={fileInputRef} 
         onChange={handleFileUpload} 
         className="hidden" 
@@ -330,7 +353,7 @@ function PhotoGrid() {
             src={photo.url} 
             alt="Family moment" 
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop'; }} // Fallback if URL is broken
+            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop'; }} 
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
           
@@ -361,7 +384,7 @@ function SlideshowOverlay({ isOpen, onClose }) {
 
     const timer = setInterval(() => {
       setCurrentIndex((prevIndex) => (prevIndex + 1) % photos.length);
-    }, 3500);
+    }, 3000); // 3 seconds!
 
     return () => clearInterval(timer);
   }, [isOpen, isPlaying, photos.length]);
@@ -471,18 +494,7 @@ function SlideshowOverlay({ isOpen, onClose }) {
         </button>
       </div>
 
-      {/* Progress Bar */}
-      {isPlaying && (
-        <div className="absolute bottom-0 left-0 h-1 bg-orange-500 w-full animate-[progress_3.5s_linear_infinite]" 
-             key={safeIndex} 
-        />
-      )}
-      <style>{`
-        @keyframes progress {
-          0% { width: 0%; }
-          100% { width: 100%; }
-        }
-      `}</style>
+      {/* The progress bar was fully removed from here! */}
     </div>
   );
 }
