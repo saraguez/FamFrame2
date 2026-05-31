@@ -9,7 +9,6 @@ import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged }
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore';
 
 // --- 1. FIREBASE INITIALIZATION ---
-// Your personal Vercel config
 const personalFirebaseConfig = {
   apiKey: "AIzaSyBEGOUuBCZv_cRDZzZWCTJpEzTj_TOrY9M",
   authDomain: "famframe-dceb8.firebaseapp.com",
@@ -61,7 +60,7 @@ function PhotoProvider({ children }) {
           await signInAnonymously(auth);
         }
       } catch (err) {
-        console.error("Auth error:", err);
+        console.error("Erreur d'authentification :", err);
       }
     };
     initAuth();
@@ -93,7 +92,7 @@ function PhotoProvider({ children }) {
         setLoading(false);
       },
       (error) => {
-        console.error("Error fetching photos real-time:", error);
+        console.error("Erreur lors de la récupération des photos :", error);
         setLoading(false);
       }
     );
@@ -113,7 +112,7 @@ function PhotoProvider({ children }) {
         addedBy: user.uid
       });
     } catch (error) {
-      console.error("Failed to add photo:", error);
+      console.error("Échec de l'ajout de la photo :", error);
     }
   };
 
@@ -122,7 +121,7 @@ function PhotoProvider({ children }) {
     try {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'photos', id));
     } catch (error) {
-      console.error("Failed to remove photo:", error);
+      console.error("Échec de la suppression de la photo :", error);
     }
   };
 
@@ -133,7 +132,7 @@ function PhotoProvider({ children }) {
         caption: newCaption
       });
     } catch (error) {
-      console.error("Failed to update caption:", error);
+      console.error("Échec de la mise à jour de la légende :", error);
     }
   };
 
@@ -168,7 +167,7 @@ function Header() {
           }`}
         >
           {isAdmin ? <Shield className="size-4" /> : <ShieldOff className="size-4" />}
-          {isAdmin ? 'Admin View' : 'Guest View'}
+          {isAdmin ? 'Mode Admin' : 'Mode Invité'}
         </button>
       </div>
     </header>
@@ -186,8 +185,8 @@ function UploadZone() {
     e.preventDefault();
     if (url.trim()) {
       setIsSubmitting(true);
-      const fallbackDate = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-      const finalCaption = customCaption.trim() || `Saved from Web • ${fallbackDate}`;
+      const fallbackDate = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      const finalCaption = customCaption.trim() || `Enregistré depuis le Web • ${fallbackDate}`;
       await addPhoto(url.trim(), finalCaption);
       setUrl('');
       setCustomCaption(''); 
@@ -218,13 +217,13 @@ function UploadZone() {
             photoDate = exifData.DateTimeOriginal;
           }
 
-          const monthYear = photoDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+          const monthYear = photoDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
           generatedCaption = monthYear;
 
-          // 2. If we found GPS coordinates, turn them into a City and Country!
+          // 2. If we found GPS coordinates, turn them into a City and Country! (localityLanguage=fr for French)
           if (exifData && exifData.latitude && exifData.longitude) {
             try {
-              const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${exifData.latitude}&longitude=${exifData.longitude}&localityLanguage=en`);
+              const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${exifData.latitude}&longitude=${exifData.longitude}&localityLanguage=fr`);
               const data = await res.json();
               const city = data.city || data.locality;
               const country = data.countryName;
@@ -232,12 +231,12 @@ function UploadZone() {
                 generatedCaption = `${city}, ${country} • ${monthYear}`;
               }
             } catch (err) {
-              console.error("Geocoding failed", err);
+              console.error("Le géocodage a échoué", err);
             }
           }
         } catch (err) {
-          console.error("No EXIF found", err);
-          generatedCaption = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+          console.error("Aucun EXIF trouvé", err);
+          generatedCaption = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
         }
         
         // Use their typed caption, or fallback to our magical auto-detected one!
@@ -299,7 +298,7 @@ function UploadZone() {
       'https://images.unsplash.com/photo-1581952971145-21950d60d3d2?q=80&w=1200&auto=format&fit=crop'
     ];
     const randomUrl = demos[Math.floor(Math.random() * demos.length)];
-    await addPhoto(randomUrl, customCaption.trim() || "A magical family moment! ✨");
+    await addPhoto(randomUrl, customCaption.trim() || "Un moment magique en famille ! ✨");
     setIsSubmitting(false);
   };
 
@@ -313,10 +312,10 @@ function UploadZone() {
         )}
       </div>
       <h3 className="text-xl font-semibold text-slate-900 mb-2">
-        Share a new photo
+        Partager une nouvelle photo
       </h3>
       <p className="text-slate-500 max-w-sm mb-6 text-sm">
-        Upload directly from your device (up to 20 at once), paste a link, or use our magical sample generator.
+        Importez directement depuis votre appareil (jusqu'à 20 à la fois), collez un lien, ou utilisez notre générateur magique.
       </p>
 
       {/* Custom Caption Field */}
@@ -325,13 +324,13 @@ function UploadZone() {
           type="text" 
           value={customCaption}
           onChange={(e) => setCustomCaption(e.target.value)}
-          placeholder="Write a custom caption (optional)..." 
+          placeholder="Écrire une légende (facultatif)..." 
           className="block w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm outline-none bg-white shadow-sm transition-all"
           disabled={isSubmitting}
           maxLength={100}
         />
         <p className="text-xs text-slate-400 mt-2 text-left px-2 font-medium">
-          * Leave blank to magically extract the time and place from your photo!
+          * Laissez vide pour extraire magiquement l'heure et le lieu de votre photo !
         </p>
       </div>
       
@@ -350,12 +349,12 @@ function UploadZone() {
         className="w-full max-w-md bg-orange-500 hover:bg-orange-600 text-white px-6 py-3.5 rounded-xl text-base font-semibold transition-all shadow-sm shadow-orange-500/20 active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2 mb-6"
       >
         <Camera className="size-5" />
-        {isSubmitting ? "Uploading..." : "Upload from Device"}
+        {isSubmitting ? "Importation..." : "Importer depuis l'appareil"}
       </button>
 
       <div className="flex items-center gap-4 w-full max-w-md mb-6">
         <div className="h-px bg-slate-200 flex-1"></div>
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">OR PASTE URL</span>
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">OU COLLER UN LIEN</span>
         <div className="h-px bg-slate-200 flex-1"></div>
       </div>
       
@@ -370,7 +369,7 @@ function UploadZone() {
             required
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="Paste image URL (https://...)" 
+            placeholder="Coller l'URL de l'image (https://...)" 
             className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm outline-none bg-white"
             disabled={isSubmitting}
           />
@@ -380,7 +379,7 @@ function UploadZone() {
           disabled={isSubmitting}
           className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-70 flex-shrink-0"
         >
-          Add Link
+          Ajouter le lien
         </button>
       </form>
 
@@ -390,7 +389,7 @@ function UploadZone() {
         disabled={isSubmitting}
         className="text-sm font-semibold text-orange-600 hover:text-orange-700 bg-orange-100/50 hover:bg-orange-100 px-5 py-2 rounded-full transition-colors flex items-center gap-2"
       >
-        <Sparkles className="size-4" /> Add a random family moment
+        <Sparkles className="size-4" /> Ajouter un moment aléatoire
       </button>
     </div>
   );
@@ -407,7 +406,7 @@ function PhotoGrid() {
     return (
       <div className="py-24 flex flex-col items-center justify-center text-slate-400 border border-slate-200 border-dashed rounded-2xl bg-slate-50/50">
         <Loader2 className="size-10 mb-4 animate-spin text-orange-500" />
-        <p className="font-medium text-slate-500">Syncing with the family cloud...</p>
+        <p className="font-medium text-slate-500">Synchronisation avec le cloud familial...</p>
       </div>
     );
   }
@@ -416,7 +415,7 @@ function PhotoGrid() {
     return (
       <div className="py-24 flex flex-col items-center justify-center text-slate-400 border border-slate-200 border-dashed rounded-2xl bg-slate-50/50">
         <ImageIcon className="size-14 mb-4 opacity-40 text-slate-400" />
-        <p className="font-medium text-slate-500">No photos yet. Be the first to add one!</p>
+        <p className="font-medium text-slate-500">Aucune photo pour l'instant. Soyez le premier à en ajouter une !</p>
       </div>
     );
   }
@@ -437,7 +436,7 @@ function PhotoGrid() {
         <div key={photo.id} className="group relative aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm hover:shadow-md transition-all">
           <img 
             src={photo.url} 
-            alt={photo.caption || "Family moment"} 
+            alt={photo.caption || "Moment en famille"} 
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop'; }} 
           />
@@ -458,14 +457,14 @@ function PhotoGrid() {
               <button 
                 onClick={() => handleStartEdit(photo)}
                 className="p-2.5 bg-blue-500/95 hover:bg-blue-600 text-white rounded-full shadow-sm"
-                title="Edit caption"
+                title="Modifier la légende"
               >
                 <Edit3 className="size-4" />
               </button>
               <button 
                 onClick={() => removePhoto(photo.id)}
                 className="p-2.5 bg-red-500/95 hover:bg-red-600 text-white rounded-full shadow-sm"
-                title="Delete photo"
+                title="Supprimer la photo"
               >
                 <Trash2 className="size-4" />
               </button>
@@ -475,13 +474,13 @@ function PhotoGrid() {
           {/* Inline Edit Mode Overlay */}
           {isAdmin && editingId === photo.id && (
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm p-4 flex flex-col justify-center items-center gap-3 z-30">
-              <p className="text-white text-xs font-semibold uppercase tracking-wider">Edit Caption</p>
+              <p className="text-white text-xs font-semibold uppercase tracking-wider">Modifier la légende</p>
               <textarea 
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
                 className="w-full text-sm p-3 rounded-xl bg-white/10 text-white border border-white/20 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none resize-none"
                 rows={3}
-                placeholder="Who's in the photo?"
+                placeholder="Qui est sur cette photo ?"
                 autoFocus
               />
               <div className="flex gap-2 w-full">
@@ -489,13 +488,13 @@ function PhotoGrid() {
                   onClick={() => setEditingId(null)}
                   className="flex-1 py-2 bg-slate-600 hover:bg-slate-500 text-white text-sm font-medium rounded-lg transition-colors"
                 >
-                  Cancel
+                  Annuler
                 </button>
                 <button 
                   onClick={() => handleSaveEdit(photo.id)}
                   className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-1"
                 >
-                  <Check className="size-4" /> Save
+                  <Check className="size-4" /> Enregistrer
                 </button>
               </div>
             </div>
@@ -589,7 +588,7 @@ function SlideshowOverlay({ isOpen, onClose }) {
         await document.exitFullscreen();
       }
     } catch (err) {
-      console.error("Fullscreen error:", err);
+      console.error("Erreur plein écran :", err);
     }
   };
 
@@ -613,21 +612,21 @@ function SlideshowOverlay({ isOpen, onClose }) {
           <button 
             onClick={() => setIsPlaying(!isPlaying)}
             className="p-2.5 bg-white/10 hover:bg-white/25 rounded-full transition-colors backdrop-blur-sm"
-            title={isPlaying ? "Pause slideshow" : "Play slideshow"}
+            title={isPlaying ? "Mettre en pause" : "Lancer le diaporama"}
           >
             {isPlaying ? <Pause className="size-5" /> : <Play className="size-5" fill="currentColor" />}
           </button>
           <button
             onClick={toggleFullscreen}
             className="p-2.5 bg-white/10 hover:bg-white/25 rounded-full transition-colors backdrop-blur-sm"
-            title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+            title={isFullscreen ? "Quitter le plein écran" : "Passer en plein écran"}
           >
             {isFullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
           </button>
           <button 
             onClick={handleClose}
             className="p-2.5 bg-white/10 hover:bg-white/25 rounded-full transition-colors backdrop-blur-sm"
-            title="Close slideshow"
+            title="Fermer le diaporama"
           >
             <X className="size-6" />
           </button>
@@ -645,7 +644,7 @@ function SlideshowOverlay({ isOpen, onClose }) {
         <img 
           key={photos[safeIndex].id}
           src={photos[safeIndex].url} 
-          alt={photos[safeIndex].caption || "Slideshow"} 
+          alt={photos[safeIndex].caption || "Diaporama"} 
           className="w-full h-full object-contain animate-in fade-in zoom-in-95 duration-500"
           onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop'; }}
         />
@@ -677,7 +676,7 @@ function Hub() {
   const [isSlideshowOpen, setIsSlideshowOpen] = useState(false);
 
   useEffect(() => {
-    document.title = "FamFrame — A shared family photo frame";
+    document.title = "FamFrame — Un cadre photo familial partagé";
   }, []);
 
   return (
@@ -688,14 +687,14 @@ function Hub() {
         {/* Hero Section */}
         <section className="space-y-4">
           <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-100 text-orange-700">
-            <Sparkles className="size-3.5" /> Global Sync Active
+            <Sparkles className="size-3.5" /> Synchronisation globale active
           </div>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-[1.1]">
-            Share a moment.<br />
-            <span className="text-orange-500">Make Mom smile.</span>
+            Partagez un moment.<br />
+            <span className="text-orange-500">Faites sourire Maman.</span>
           </h1>
           <p className="text-slate-500 text-lg sm:text-xl max-w-2xl leading-relaxed">
-            Add a photo here and it instantly synchronizes across every family member's screen, anywhere in the world.
+            Ajoutez une photo ici et elle se synchronise instantanément sur l'écran de toute la famille, partout dans le monde.
           </p>
         </section>
 
@@ -706,16 +705,16 @@ function Hub() {
         <section className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-slate-100 pb-4 gap-4">
             <div>
-              <h2 className="text-2xl font-bold tracking-tight text-slate-900">The album</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900">L'album</h2>
               <p className="text-sm text-slate-500 mt-1.5 flex items-center gap-2 h-5">
                 {!loading && (
                   <>
-                    {photos.length} photo{photos.length === 1 ? "" : "s"} in the frame
+                    {photos.length} photo{photos.length === 1 ? "" : "s"} dans le cadre
                     {isAdmin && (
                       <>
                         <span className="w-1 h-1 rounded-full bg-slate-300 mx-1" />
                         <span className="text-orange-500 font-medium flex items-center gap-1">
-                          <Shield className="size-3.5" /> Admin mode
+                          <Shield className="size-3.5" /> Mode admin
                         </span>
                       </>
                     )}
@@ -730,7 +729,7 @@ function Hub() {
               className="flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-full font-medium transition-all shadow-sm shadow-orange-500/20 active:scale-95 disabled:opacity-50 disabled:pointer-events-none w-full sm:w-auto"
             >
               <Play className="size-4" fill="currentColor" />
-              Play Slideshow
+              Lancer le diaporama
             </button>
           </div>
           
