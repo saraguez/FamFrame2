@@ -9,6 +9,7 @@ import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged }
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore';
 
 // --- 1. FIREBASE INITIALIZATION ---
+// Your personal Vercel config
 const personalFirebaseConfig = {
   apiKey: "AIzaSyBEGOUuBCZv_cRDZzZWCTJpEzTj_TOrY9M",
   authDomain: "famframe-dceb8.firebaseapp.com",
@@ -22,6 +23,7 @@ const firebaseConfig = typeof __firebase_config !== 'undefined'
   ? JSON.parse(__firebase_config) 
   : personalFirebaseConfig;
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -38,23 +40,13 @@ export function usePhotos() {
   return context;
 }
 
-// Smart helper to ALWAYS return a caption, even for old photos
-export const getPhotoCaption = (photo) => {
-  if (photo.caption && photo.caption.trim() !== '') {
-    return photo.caption;
-  }
-  if (photo.createdAt) {
-    return new Date(photo.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  }
-  return "Family Moment";
-};
-
 function PhotoProvider({ children }) {
   const [user, setUser] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Auth Effect: Sign the user in silently to access the database
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -62,6 +54,7 @@ function PhotoProvider({ children }) {
           try {
             await signInWithCustomToken(auth, __initial_auth_token);
           } catch (tokenError) {
+            console.warn("Custom token mismatch. Falling back to anonymous login.");
             await signInAnonymously(auth);
           }
         } else {
@@ -79,8 +72,9 @@ function PhotoProvider({ children }) {
     return () => unsubscribe();
   }, []);
 
+  // Database Effect: Listen to real-time changes in the cloud
   useEffect(() => {
-    if (!user) return; 
+    if (!user) return; // Guard clause
     
     const photosRef = collection(db, 'artifacts', appId, 'public', 'data', 'photos');
     
@@ -92,12 +86,14 @@ function PhotoProvider({ children }) {
           ...doc.data() 
         }));
         
+        // Sort in memory: newest first
         fetchedPhotos.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        
         setPhotos(fetchedPhotos);
         setLoading(false);
       },
       (error) => {
-        console.error("Error fetching photos:", error);
+        console.error("Error fetching photos real-time:", error);
         setLoading(false);
       }
     );
@@ -105,6 +101,7 @@ function PhotoProvider({ children }) {
     return () => unsubscribe();
   }, [user]);
 
+  // Actions
   const addPhoto = async (url, caption = '') => {
     if (!user) return;
     try {
@@ -199,7 +196,7 @@ function UploadZone() {
   };
 
   const handleFileUpload = async (e) => {
-    const files = Array.from(e.target.files || []).slice(0, 20); 
+    const files = Array.from(e.target.files || []).slice(0, 20); // Cap at 20 files
     if (files.length === 0) return;
 
     setIsSubmitting(true);
@@ -248,6 +245,7 @@ function UploadZone() {
         // -------------------------------
 
         const reader = new FileReader();
+        
         reader.onload = (event) => {
           const img = new Image();
           img.onload = async () => {
@@ -385,6 +383,15 @@ function UploadZone() {
           Add Link
         </button>
       </form>
+
+      {/* 3. Demo Button */}
+      <button 
+        onClick={addRandomDemo}
+        disabled={isSubmitting}
+        className="text-sm font-semibold text-orange-600 hover:text-orange-700 bg-orange-100/50 hover:bg-orange-100 px-5 py-2 rounded-full transition-colors flex items-center gap-2"
+      >
+        <Sparkles className="size-4" /> Add a random family moment
+      </button>
     </div>
   );
 }
@@ -392,6 +399,7 @@ function UploadZone() {
 function PhotoGrid() {
   const { photos, isAdmin, removePhoto, updatePhotoCaption, loading } = usePhotos();
   
+  // State for inline editing
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
 
@@ -415,8 +423,7 @@ function PhotoGrid() {
 
   const handleStartEdit = (photo) => {
     setEditingId(photo.id);
-    // Pre-fill with the auto-generated date if it's an older photo with no caption!
-    setEditValue(getPhotoCaption(photo));
+    setEditValue(photo.caption || "");
   };
 
   const handleSaveEdit = async (id) => {
@@ -426,78 +433,75 @@ function PhotoGrid() {
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 animate-in fade-in duration-500">
-      {photos.map((photo) => {
-        const displayCaption = getPhotoCaption(photo);
+      {photos.map((photo) => (
+        <div key={photo.id} className="group relative aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm hover:shadow-md transition-all">
+          <img 
+            src={photo.url} 
+            alt={photo.caption || "Family moment"} 
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop'; }} 
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+          
+          {/* Display caption on hover in the grid */}
+          {photo.caption && editingId !== photo.id && (
+            <div className="absolute bottom-0 inset-x-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
+              <p className="text-white text-sm font-medium line-clamp-2 drop-shadow-md">
+                {photo.caption}
+              </p>
+            </div>
+          )}
+          
+          {/* Admin Tools: Edit & Delete Buttons */}
+          {isAdmin && editingId !== photo.id && (
+            <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 shadow-sm z-20">
+              <button 
+                onClick={() => handleStartEdit(photo)}
+                className="p-2.5 bg-blue-500/95 hover:bg-blue-600 text-white rounded-full shadow-sm"
+                title="Edit caption"
+              >
+                <Edit3 className="size-4" />
+              </button>
+              <button 
+                onClick={() => removePhoto(photo.id)}
+                className="p-2.5 bg-red-500/95 hover:bg-red-600 text-white rounded-full shadow-sm"
+                title="Delete photo"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+          )}
 
-        return (
-          <div key={photo.id} className="group relative aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm hover:shadow-md transition-all">
-            <img 
-              src={photo.url} 
-              alt={displayCaption} 
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop'; }} 
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-            
-            {/* Display caption on hover in the grid */}
-            {editingId !== photo.id && (
-              <div className="absolute bottom-0 inset-x-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
-                <p className="text-white text-sm font-medium line-clamp-2 drop-shadow-md">
-                  {displayCaption}
-                </p>
-              </div>
-            )}
-            
-            {/* Admin Tools: Edit & Delete Buttons */}
-            {isAdmin && editingId !== photo.id && (
-              <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 shadow-sm z-20">
+          {/* Inline Edit Mode Overlay */}
+          {isAdmin && editingId === photo.id && (
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm p-4 flex flex-col justify-center items-center gap-3 z-30">
+              <p className="text-white text-xs font-semibold uppercase tracking-wider">Edit Caption</p>
+              <textarea 
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                className="w-full text-sm p-3 rounded-xl bg-white/10 text-white border border-white/20 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none resize-none"
+                rows={3}
+                placeholder="Who's in the photo?"
+                autoFocus
+              />
+              <div className="flex gap-2 w-full">
                 <button 
-                  onClick={() => handleStartEdit(photo)}
-                  className="p-2.5 bg-blue-500/95 hover:bg-blue-600 text-white rounded-full shadow-sm"
-                  title="Edit caption"
+                  onClick={() => setEditingId(null)}
+                  className="flex-1 py-2 bg-slate-600 hover:bg-slate-500 text-white text-sm font-medium rounded-lg transition-colors"
                 >
-                  <Edit3 className="size-4" />
+                  Cancel
                 </button>
                 <button 
-                  onClick={() => removePhoto(photo.id)}
-                  className="p-2.5 bg-red-500/95 hover:bg-red-600 text-white rounded-full shadow-sm"
-                  title="Delete photo"
+                  onClick={() => handleSaveEdit(photo.id)}
+                  className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-1"
                 >
-                  <Trash2 className="size-4" />
+                  <Check className="size-4" /> Save
                 </button>
               </div>
-            )}
-
-            {/* Inline Edit Mode Overlay */}
-            {isAdmin && editingId === photo.id && (
-              <div className="absolute inset-0 bg-black/80 backdrop-blur-sm p-4 flex flex-col justify-center items-center gap-3 z-30">
-                <p className="text-white text-xs font-semibold uppercase tracking-wider">Edit Caption</p>
-                <textarea 
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  className="w-full text-sm p-3 rounded-xl bg-white/10 text-white border border-white/20 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none resize-none"
-                  rows={3}
-                  autoFocus
-                />
-                <div className="flex gap-2 w-full">
-                  <button 
-                    onClick={() => setEditingId(null)}
-                    className="flex-1 py-2 bg-slate-600 hover:bg-slate-500 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={() => handleSaveEdit(photo.id)}
-                    className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-1"
-                  >
-                    <Check className="size-4" /> Save
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -514,7 +518,7 @@ function SlideshowOverlay({ isOpen, onClose }) {
 
     const timer = setInterval(() => {
       setCurrentIndex((prevIndex) => (prevIndex + 1) % photos.length);
-    }, 3000); 
+    }, 3000); // 3 seconds!
 
     return () => clearInterval(timer);
   }, [isOpen, isPlaying, photos.length]);
@@ -534,11 +538,45 @@ function SlideshowOverlay({ isOpen, onClose }) {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  // --- NEW: SCREEN WAKE LOCK MAGIC FOR PORTAL ---
+  useEffect(() => {
+    let wakeLock = null;
+
+    const requestWakeLock = async () => {
+      // Check if the browser supports Wake Lock, and only apply it when playing
+      if ('wakeLock' in navigator && isOpen && isPlaying) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          console.log('Screen Wake Lock is active! Screen will not sleep.');
+        } catch (err) {
+          console.error('Wake Lock error:', err);
+        }
+      }
+    };
+
+    requestWakeLock();
+
+    // If the tablet momentarily switches tabs/apps, we need to re-request it when returning
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup: release the lock when the slideshow closes or pauses
+    return () => {
+      if (wakeLock !== null) {
+        wakeLock.release().catch(console.error);
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isOpen, isPlaying]);
+  // -----------------------------------
+
   if (!isOpen || photos.length === 0) return null;
 
   const safeIndex = currentIndex >= photos.length ? 0 : currentIndex;
-  const currentPhoto = photos[safeIndex];
-  const displayCaption = getPhotoCaption(currentPhoto);
   
   const handleNext = () => setCurrentIndex((prev) => (prev + 1) % photos.length);
   const handlePrev = () => setCurrentIndex((prev) => (prev - 1 + photos.length) % photos.length);
@@ -605,9 +643,9 @@ function SlideshowOverlay({ isOpen, onClose }) {
         </button>
         
         <img 
-          key={currentPhoto.id}
-          src={currentPhoto.url} 
-          alt={displayCaption} 
+          key={photos[safeIndex].id}
+          src={photos[safeIndex].url} 
+          alt={photos[safeIndex].caption || "Slideshow"} 
           className="w-full h-full object-contain animate-in fade-in zoom-in-95 duration-500"
           onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?q=80&w=800&auto=format&fit=crop'; }}
         />
@@ -619,12 +657,14 @@ function SlideshowOverlay({ isOpen, onClose }) {
           <ChevronRight className="size-8" />
         </button>
         
-        {/* Caption Overlay in Slideshow ALWAYS visible now */}
-        <div className="absolute bottom-8 sm:bottom-12 inset-x-0 flex justify-center z-20 px-6 animate-in slide-in-from-bottom-4 duration-500 pointer-events-none">
-          <div className="bg-black/60 backdrop-blur-md text-white px-8 py-3.5 rounded-full text-base sm:text-lg font-medium shadow-2xl max-w-2xl text-center border border-white/10 tracking-wide">
-            {displayCaption}
+        {/* Caption Overlay in Slideshow */}
+        {photos[safeIndex].caption && (
+          <div className="absolute bottom-8 sm:bottom-12 inset-x-0 flex justify-center z-20 px-6 animate-in slide-in-from-bottom-4 duration-500 pointer-events-none">
+            <div className="bg-black/60 backdrop-blur-md text-white px-8 py-3.5 rounded-full text-base sm:text-lg font-medium shadow-2xl max-w-2xl text-center border border-white/10 tracking-wide">
+              {photos[safeIndex].caption}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -696,6 +736,7 @@ function Hub() {
           
           <PhotoGrid />
         </section>
+        
       </main>
 
       <SlideshowOverlay 
