@@ -2,13 +2,15 @@ import React, { useState, createContext, useContext, useEffect, useRef } from 'r
 import { 
   Sparkles, UploadCloud, Image as ImageIcon, Trash2, Camera, 
   Shield, ShieldOff, Play, Pause, X, ChevronLeft, ChevronRight, 
-  Link as LinkIcon, Loader2, Maximize, Minimize, Edit3, Check 
+  Link as LinkIcon, Loader2, Maximize, Minimize, Edit3, Check,
+  Sun, Cloud, CloudFog, CloudRain, Snowflake, CloudLightning
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore';
 
 // --- 1. FIREBASE INITIALIZATION ---
+// Safely use Canvas preview config OR your personal Vercel config
 const personalFirebaseConfig = {
   apiKey: "AIzaSyBEGOUuBCZv_cRDZzZWCTJpEzTj_TOrY9M",
   authDomain: "famframe-dceb8.firebaseapp.com",
@@ -505,6 +507,76 @@ function PhotoGrid() {
   );
 }
 
+// --- NEW COMPONENT: TIME & WEATHER ---
+function WeatherTimeWidget() {
+  const [time, setTime] = useState(new Date());
+  const [weather, setWeather] = useState(null);
+
+  // Update time every second
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Fetch weather every 30 minutes
+  useEffect(() => {
+    const fetchWeather = async () => {
+      try {
+        // 1. Get Location silently (no popup)
+        const locRes = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=fr');
+        const locData = await locRes.json();
+        const lat = locData.latitude;
+        const lon = locData.longitude;
+
+        // 2. Get live weather from Open-Meteo (Free, no API key needed)
+        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+        const weatherData = await weatherRes.json();
+
+        setWeather({
+          temp: Math.round(weatherData.current_weather.temperature),
+          code: weatherData.current_weather.weathercode,
+          city: locData.city || locData.locality
+        });
+      } catch (error) {
+        console.error("Erreur météo:", error);
+      }
+    };
+
+    fetchWeather();
+    const weatherTimer = setInterval(fetchWeather, 30 * 60 * 1000);
+    return () => clearInterval(weatherTimer);
+  }, []);
+
+  const getWeatherIcon = (code) => {
+    // Standard WMO weather interpretation codes
+    if (code === 0) return <Sun className="size-8 sm:size-10 text-yellow-400 drop-shadow-md" />;
+    if (code >= 1 && code <= 3) return <Cloud className="size-8 sm:size-10 text-slate-200 drop-shadow-md" />;
+    if (code === 45 || code === 48) return <CloudFog className="size-8 sm:size-10 text-slate-300 drop-shadow-md" />;
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return <CloudRain className="size-8 sm:size-10 text-blue-300 drop-shadow-md" />;
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return <Snowflake className="size-8 sm:size-10 text-white drop-shadow-md" />;
+    if (code >= 95) return <CloudLightning className="size-8 sm:size-10 text-yellow-300 drop-shadow-md" />;
+    return <Sun className="size-8 sm:size-10 text-yellow-400 drop-shadow-md" />;
+  };
+
+  return (
+    <div className="absolute bottom-6 left-6 sm:bottom-10 sm:left-10 z-30 flex flex-col items-start gap-1 pointer-events-none">
+      <div className="text-6xl sm:text-7xl font-bold text-white tracking-tighter drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)]">
+        {time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+      </div>
+      {weather && (
+        <div className="flex items-center gap-3 mt-1 drop-shadow-[0_3px_6px_rgba(0,0,0,0.8)]">
+          {getWeatherIcon(weather.code)}
+          <span className="text-3xl sm:text-4xl font-semibold text-white tracking-tight">{weather.temp}°C</span>
+          <span className="text-xl sm:text-2xl font-medium text-white/90 pl-4 border-l-2 border-white/40 ml-1 drop-shadow-md">
+            {weather.city}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function SlideshowOverlay({ isOpen, onClose }) {
   const { photos } = usePhotos();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -664,6 +736,10 @@ function SlideshowOverlay({ isOpen, onClose }) {
             </div>
           </div>
         )}
+
+        {/* TIME AND WEATHER WIDGET HERE */}
+        <WeatherTimeWidget />
+
       </div>
     </div>
   );
